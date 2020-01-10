@@ -8,6 +8,7 @@ use syntect::html::{
 
 use crate::context::RenderContext;
 use crate::table_of_contents::{make_table_of_contents, Heading};
+use std::collections::HashMap;
 use config::highlighting::{get_highlighter, SYNTAX_SET, THEME_SET};
 use errors::{Error, Result};
 use front_matter::InsertAnchor;
@@ -166,6 +167,91 @@ fn get_heading_refs(events: &[Event]) -> Vec<HeadingRef> {
     heading_refs
 }
 
+#[derive(Default)]
+struct CodeMarker {
+    start: String,
+    end: String,
+    class: String,
+}
+
+#[derive(Default)]
+struct CodeBlockInfo {
+    language: String,
+    line_numbers: bool,
+    title: Option<String>,
+    markers: Vec<CodeMarker>,
+}
+
+impl CodeBlockInfo {
+    fn substitute_markers(&self, mut inp: String) -> String {
+        for marker in &self.markers {
+            inp = inp.replace(&marker.start, &format!("<span class=\"{}\">", marker.class));
+            inp = inp.replace(&marker.end, "</span>");
+        }
+
+        inp
+    }
+}
+
+fn parse_info(t: impl AsRef<str>) -> CodeBlockInfo {
+    lazy_static! {
+        static ref MARKERS: regex::Regex =
+            regex::Regex::new(r"^mark(?P<index>[0-9]+)_(?P<field>(start|end|class))=(?P<value>.*)$").unwrap();
+    }
+
+    let mut title = None;
+    let mut language = "".to_owned();
+    let mut line_numbers = false;
+    let mut raw_markers = HashMap::new();
+
+    let v = match shellwords::split(t.as_ref()) {
+        Err(_) => return CodeBlockInfo::default(),
+        Ok(v) => v,
+    };
+
+    for (idx, item) in v.iter().enumerate() {
+        if idx == 0 {
+            language = item.to_owned();
+        }
+        if item.starts_with("title=") {
+            title = Some(item[6..].to_owned());
+        } else if item == "line-numbers" {
+            line_numbers = true;
+        } else if let Some(ref caps) = MARKERS.captures(&item) {
+            let index : usize = caps.name("index").unwrap().as_str().to_string().parse().unwrap();
+            let field = caps.name("field").unwrap().as_str();
+            let value = caps.name("value").unwrap().as_str().to_string();
+
+            use std::collections::hash_map;
+            let entry = match raw_markers.entry(index) {
+                hash_map::Entry::Vacant(v) => v.insert(CodeMarker::default()),
+                hash_map::Entry::Occupied(o) => o.into_mut(),
+            };
+
+            match field {
+                "start" => entry.start = value,
+                "end" => entry.end = value,
+                "class" => entry.class = value,
+                _ => panic!(),
+            }
+        }
+    }
+
+    let mut markers = vec![];
+    for (_, marker) in raw_markers {
+        if marker.start.len() > 0  && marker.end.len() > 0 {
+            markers.push(marker)
+        }
+    }
+
+    CodeBlockInfo {
+        language,
+        line_numbers,
+        title,
+        markers,
+    }
+}
+
 pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Rendered> {
     // the rendered html
     let mut html = String::with_capacity(content.len());
@@ -174,6 +260,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
 
     let mut background = IncludeBackground::Yes;
     let mut highlighter: Option<(HighlightLines, bool)> = None;
+    let mut start_snippet: Option<(CodeBlockInfo, String)> = None;
 
     let mut inserted_anchors: Vec<String> = vec![];
     let mut headings: Vec<Heading> = vec![];
@@ -193,6 +280,41 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                     Event::Text(text) => {
                         // if we are in the middle of a code block
                         if let Some((ref mut highlighter, in_extra)) = highlighter {
+                            let (info_parsed, snippet) = start_snippet.take().unwrap();
+
+                            let mut html = String::new();
+                            html.push_str("<div class=\"mycode-block\">");
+                            html.push_str("<table class=\"codeBox\">");
+                            html.push_str("<tbody>");
+
+                            if let Some(title) = &info_parsed.title {
+                                html.push_str("<tr>");
+                                html.push_str("<td class=\"codeTitle\" colspan=\"2\">");
+                                html.push_str(title);
+                                html.push_str("</td>");
+                                html.push_str("</tr>");
+                            }
+
+                            html.push_str("<tr>");
+
+                            if info_parsed.line_numbers {
+                                html.push_str("<td class=\"lineNumbers\">");
+                                html.push_str("<div class=\"lineNumbersDiv\">");
+                                html.push_str("<pre>");
+
+                                for (idx, _) in text.split("\n").enumerate().skip(1) {
+                                    html.push_str(&format!("{}\n", idx));
+                                }
+
+                                html.push_str("</pre>");
+                                html.push_str("</div>");
+                                html.push_str("</rd>");
+
+                                html.push_str("<td class=\"sourceCode\">");
+                            } else {
+                                html.push_str("<td class=\"sourceCode sourceCodeWrap\">");
+                            }
+
                             let highlighted = if in_extra {
                                 if let Some(ref extra) = context.config.extra_syntax_set {
                                     highlighter.highlight(&text, &extra)
@@ -204,8 +326,12 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                             } else {
                                 highlighter.highlight(&text, &SYNTAX_SET)
                             };
-                            //let highlighted = &highlighter.highlight(&text, ss);
-                            let html = styled_line_to_highlighted_html(&highlighted, background);
+
+                            html.push_str(&snippet);
+                            let processed = info_parsed.substitute_markers(
+                                styled_line_to_highlighted_html(&highlighted, background));
+                            html.push_str(&processed);
+
                             return Event::Html(html.into());
                         }
 
@@ -218,10 +344,21 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                         }
 
                         let theme = &THEME_SET.themes[&context.config.highlight_theme];
+
                         match kind {
                             CodeBlockKind::Indented => (),
                             CodeBlockKind::Fenced(info) => {
                                 highlighter = Some(get_highlighter(info, &context.config));
+                            }
+                        };
+
+                        let info_parsed = match kind {
+                            CodeBlockKind::Indented => Default::default(),
+                            CodeBlockKind::Fenced(info) => {
+                                let info_parsed = parse_info(info);
+                                highlighter = Some(get_highlighter(&info_parsed.language,
+                                        &context.config));
+                                info_parsed
                             }
                         };
                         // This selects the background color the same way that start_coloured_html_snippet does
@@ -231,9 +368,8 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                             .unwrap_or(::syntect::highlighting::Color::WHITE);
                         background = IncludeBackground::IfDifferent(color);
                         let snippet = start_highlighted_html_snippet(theme);
-                        let mut html = snippet.0;
-                        html.push_str("<code>");
-                        Event::Html(html.into())
+                        start_snippet = Some((info_parsed, snippet.0));
+                        Event::Html("".into())
                     }
                     Event::End(Tag::CodeBlock(_)) => {
                         if !context.config.highlight_code {
@@ -241,7 +377,14 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                         }
                         // reset highlight and close the code block
                         highlighter = None;
-                        Event::Html("</code></pre>".into())
+                        let mut suffix = String::new();
+                        suffix.push_str("</td>");
+                        suffix.push_str("</pre>");
+                        suffix.push_str("</tr>");
+                        suffix.push_str("</tbody>");
+                        suffix.push_str("</table>");
+                        suffix.push_str("</div>");
+                        Event::Html(suffix.into())
                     }
                     Event::Start(Tag::Image(link_type, src, title)) => {
                         if is_colocated_asset_link(&src) {

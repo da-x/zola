@@ -2119,6 +2119,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_derive",
+ "shellwords",
  "syntect",
  "templates",
  "tera",
@@ -2386,6 +2387,16 @@ dependencies = [
  "digest",
  "fake-simd",
  "opaque-debug",
+]
+
+[[package]]
+name = "shellwords"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "685f0e9b0efe23d26e60a780d8dcd3ac95e90975814de9bc6f48e5d609b5d0f5"
+dependencies = [
+ "lazy_static",
+ "regex",
 ]
 
 [[package]]
