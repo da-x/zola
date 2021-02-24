@@ -1,8 +1,8 @@
 use lazy_static::lazy_static;
 use syntect::dumps::from_binary;
-use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
+use syntect::parsing::SyntaxReference;
 
 use crate::config::Config;
 
@@ -16,9 +16,12 @@ lazy_static! {
         from_binary(include_bytes!("../../../sublime/themes/all.themedump"));
 }
 
+pub fn get_css(theme: &syntect::highlighting::Theme) -> String {
+    syntect::html::css_for_theme(&theme)
+}
+
 /// Returns the highlighter and whether it was found in the extra or not
-pub fn get_highlighter<'a>(info: &str, config: &Config) -> (HighlightLines<'a>, bool) {
-    let theme = &THEME_SET.themes[&config.highlight_theme];
+pub fn get_highlighter(info: &str, config: &Config) -> (SyntaxReference, bool) {
     let mut in_extra = false;
 
     if let Some(ref lang) = info.split(' ').next() {
@@ -36,8 +39,8 @@ pub fn get_highlighter<'a>(info: &str, config: &Config) -> (HighlightLines<'a>, 
                 }
             })
             .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
-        (HighlightLines::new(syntax, theme), in_extra)
+        (syntax.clone(), in_extra)
     } else {
-        (HighlightLines::new(SYNTAX_SET.find_syntax_plain_text(), theme), false)
+        (SYNTAX_SET.find_syntax_plain_text().clone(), false)
     }
 }

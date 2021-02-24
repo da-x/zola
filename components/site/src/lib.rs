@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs::{copy, create_dir_all, remove_dir_all};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
+use std::io::Write;
 
 use glob::glob;
 use rayon::prelude::*;
@@ -833,8 +834,25 @@ impl Site {
             sass_path
         };
 
+        let tmp_dir = tempdir::TempDir::new("css")?;
         let mut options = SassOptions::default();
         options.output_style = OutputStyle::Compressed;
+        options.include_paths.push(String::from(tmp_dir.path().to_string_lossy().as_ref()));
+
+        let theme = &config::highlighting::THEME_SET.themes[&self.config.highlight_theme];
+        let mut file = std::fs::File::create(tmp_dir.path().join("syntaxtheme.scss"))?;
+        let css = config::highlighting::get_css(theme);
+        let css = css.replace(".label)", ".label");
+        file.write_all(&css.as_bytes())?;
+        drop(file);
+
+        let theme = &config::highlighting::THEME_SET.themes[&self.config.dark_highlight_theme];
+        let mut file = std::fs::File::create(tmp_dir.path().join("darksyntaxtheme.scss"))?;
+        let css = config::highlighting::get_css(theme);
+        let css = css.replace(".label)", ".label");
+        file.write_all(&css.as_bytes())?;
+        drop(file);
+
         let mut compiled_paths = self.compile_sass_glob(&sass_path, "scss", &options.clone())?;
 
         options.indented_syntax = true;
@@ -873,7 +891,6 @@ impl Site {
         let mut compiled_paths = Vec::new();
         for file in files {
             let css = compile_file(&file, options.clone())?;
-
             let path_inside_sass = file.strip_prefix(&sass_path).unwrap();
             let parent_inside_sass = path_inside_sass.parent();
             let css_output_path = self.output_path.join(path_inside_sass).with_extension("css");

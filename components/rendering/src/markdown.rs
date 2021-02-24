@@ -1,15 +1,11 @@
 use lazy_static::lazy_static;
 use pulldown_cmark as cmark;
 use regex::Regex;
-use syntect::easy::HighlightLines;
-use syntect::html::{
-    start_highlighted_html_snippet, styled_line_to_highlighted_html, IncludeBackground,
-};
-
+use syntect::html::ClassedHTMLGenerator;
 use crate::context::RenderContext;
 use crate::table_of_contents::{make_table_of_contents, Heading};
 use std::collections::HashMap;
-use config::highlighting::{get_highlighter, SYNTAX_SET, THEME_SET};
+use config::highlighting::{get_highlighter, SYNTAX_SET};
 use errors::{Error, Result};
 use front_matter::InsertAnchor;
 use utils::site::resolve_internal_link;
@@ -258,8 +254,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
     // Set while parsing
     let mut error = None;
 
-    let mut background = IncludeBackground::Yes;
-    let mut highlighter: Option<(HighlightLines, bool)> = None;
+    let mut highlighter: Option<(syntect::parsing::SyntaxReference, bool)> = None;
     let mut start_snippet: Option<(CodeBlockInfo, String)> = None;
 
     let mut inserted_anchors: Vec<String> = vec![];
@@ -279,7 +274,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                 match event {
                     Event::Text(text) => {
                         // if we are in the middle of a code block
-                        if let Some((ref mut highlighter, in_extra)) = highlighter {
+                        if let Some((ref mut syntax, in_extra)) = highlighter {
                             let (info_parsed, snippet) = start_snippet.take().unwrap();
 
                             let mut html = String::new();
@@ -317,19 +312,26 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
 
                             let highlighted = if in_extra {
                                 if let Some(ref extra) = context.config.extra_syntax_set {
-                                    highlighter.highlight(&text, &extra)
+                                    let mut html_generator = ClassedHTMLGenerator::new(&syntax, &extra);
+                                    for line in text.lines() {
+                                        html_generator.parse_html_for_line(&line);
+                                    }
+                                    html_generator.finalize()
                                 } else {
                                     unreachable!(
                                         "Got a highlighter from extra syntaxes but no extra?"
                                     );
                                 }
                             } else {
-                                highlighter.highlight(&text, &SYNTAX_SET)
+                                let mut html_generator = ClassedHTMLGenerator::new(&syntax, &SYNTAX_SET);
+                                for line in text.lines() {
+                                    html_generator.parse_html_for_line(&line);
+                                }
+                                html_generator.finalize()
                             };
 
                             html.push_str(&snippet);
-                            let processed = info_parsed.substitute_markers(
-                                styled_line_to_highlighted_html(&highlighted, background));
+                            let processed = info_parsed.substitute_markers(highlighted);
                             html.push_str(&processed);
 
                             return Event::Html(html.into());
@@ -342,8 +344,6 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                         if !context.config.highlight_code {
                             return Event::Html("<pre><code>".into());
                         }
-
-                        let theme = &THEME_SET.themes[&context.config.highlight_theme];
 
                         match kind {
                             CodeBlockKind::Indented => (),
@@ -362,13 +362,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                             }
                         };
                         // This selects the background color the same way that start_coloured_html_snippet does
-                        let color = theme
-                            .settings
-                            .background
-                            .unwrap_or(::syntect::highlighting::Color::WHITE);
-                        background = IncludeBackground::IfDifferent(color);
-                        let snippet = start_highlighted_html_snippet(theme);
-                        start_snippet = Some((info_parsed, snippet.0));
+                        start_snippet = Some((info_parsed, "<pre class=\"code\">".to_owned()));
                         Event::Html("".into())
                     }
                     Event::End(Tag::CodeBlock(_)) => {

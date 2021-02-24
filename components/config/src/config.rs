@@ -155,6 +155,10 @@ pub struct Config {
     /// Defaults to "base16-ocean-dark"
     pub highlight_theme: String,
 
+    /// Which dark theme to use for code highlighting. See Readme for supported themes
+    /// Defaults to "base16-ocean-dark"
+    pub dark_highlight_theme: String,
+
     /// Whether to generate a feed. Defaults to false.
     pub generate_feed: bool,
     /// The number of articles to include in the feed. Defaults to including all items.
@@ -216,6 +220,10 @@ impl Config {
 
         if !THEME_SET.themes.contains_key(&config.highlight_theme) {
             bail!("Highlight theme {} not available", config.highlight_theme)
+        }
+
+        if !THEME_SET.themes.contains_key(&config.dark_highlight_theme) {
+            bail!("Highlight theme {} not available", config.dark_highlight_theme)
         }
 
         if config.languages.iter().any(|l| l.code == config.default_language) {
@@ -386,6 +394,7 @@ impl Default for Config {
             theme: None,
             highlight_code: false,
             highlight_theme: "base16-ocean-dark".to_string(),
+            dark_highlight_theme: "base16-ocean-dark".to_string(),
             default_language: "en".to_string(),
             languages: Vec::new(),
             generate_feed: false,
