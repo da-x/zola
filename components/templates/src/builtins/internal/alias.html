@@ -1,6 +1,18 @@
 <!doctype html>
 <meta charset="utf-8">
+<head>
+    <style>
+@media (prefers-color-scheme: dark) {
+    body {
+	color: #ffffff;
+	background-color: #000000;
+    }
+}
+    </style> 
+</head>
 <link rel="canonical" href="{{ url | safe }}">
 <meta http-equiv="refresh" content="0; url={{ url | safe }}">
 <title>Redirect</title>
-<p><a href="{{ url | safe }}">Click here</a> to be redirected.</p>
+<body>
+    <p><a href="{{ url | safe }}">Click here</a> to be redirected.</p>
+</body>
