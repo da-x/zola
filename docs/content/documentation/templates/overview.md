@@ -16,7 +16,7 @@ you can place `{{ __tera_context }}` in the template to print the whole context.
 A few variables are available on all templates except feeds and the sitemap:
 
 - `config`: the [configuration](@/documentation/getting-started/configuration.md) without any modifications
-- `current_path`: the path (full URL without `base_url`) of the current page, never starting with a `/`
+- `current_path`: the path (full URL without `base_url`) of the current page, always starting with a `/`
 - `current_url`: the full URL for the current page
 - `lang`: the language for the current page
 
@@ -37,7 +37,7 @@ The page and section variables are described in more detail in the next section.
 
 ## Built-in templates
 Zola comes with four built-in templates: `atom.xml` and `rss.xml` (described in
-[Feeds](@/documentation/templates/feeds.md)), `sitemap.xml` (described in [Sitemap](@/documentation/templates/sitemap.md)),
+[Feeds](@/documentation/templates/feeds/index.md)), `sitemap.xml` (described in [Sitemap](@/documentation/templates/sitemap.md)),
 and `robots.txt` (described in [Robots.txt](@/documentation/templates/robots.md)).
 Additionally, themes can add their own templates, which will be applied if not
 overridden.  You can override built-in or theme templates by creating a template with
@@ -118,7 +118,7 @@ link like the ones used in Markdown, starting from the root `content` directory.
 {% set url = get_url(path="@/blog/_index.md") %}
 ```
 
-It accepts an optionnal parameter `lang` in order to compute a *language-aware URL* in multilingual websites. Assuming `config.base_url` is `"http://example.com"`, the following snippet will:
+It accepts an optional parameter `lang` in order to compute a *language-aware URL* in multilingual websites. Assuming `config.base_url` is `"http://example.com"`, the following snippet will:
 
 - return `"http://example.com/blog/"` if `config.default_language` is `"en"`
 - return `"http://example.com/en/blog/"` if `config.default_language` is **not** `"en"` and `"en"` appears in `config.languages`
@@ -146,8 +146,27 @@ In the case of non-internal links, you can also add a cachebust of the format `?
 by passing `cachebust=true` to the `get_url` function.
 
 
+### 'get_file_hash`
+
+Gets the hash digest for a static file. Supported hashes are SHA-256, SHA-384 (default) and SHA-512. Requires `path`. The `sha_type` key is optional and must be one of 256, 384 or 512.
+
+```jinja2
+{{/* get_file_hash(path="js/app.js", sha_type=256) */}}
+```
+
+This can be used to implement subresource integrity. Do note that subresource integrity is typically used when using external scripts, which `get_file_hash` does not support.
+
+```jinja2
+<script src="{{/* get_url(path="js/app.js") */}}"
+        integrity="sha384-{{/* get_file_hash(path="js/app.js", sha_type=384) */}}"></script>
+```
+
+Whenever hashing files, whether using `get_file_hash` or `get_url(..., cachebust=true)`, the file is searched for in three places: `static/`, `content/` and the output path (so e.g. compiled SASS can be hashed, too.)
+
+
 ### `get_image_metadata`
-Gets metadata for an image.  Currently, the only supported keys are `width` and `height`.
+Gets metadata for an image. This supports common formats like JPEG, PNG, as well as SVG.
+Currently, the only supported keys are `width` and `height`.
 
 ```jinja2
   {% set meta = get_image_metadata(path="...") %}
@@ -158,11 +177,13 @@ Gets metadata for an image.  Currently, the only supported keys are `width` and 
 Gets the permalink for the taxonomy item found.
 
 ```jinja2
-{% set url = get_taxonomy_url(kind="categories", name=page.taxonomies.category) %}
+{% set url = get_taxonomy_url(kind="categories", name=page.taxonomies.category, lang=page.lang) %}
 ```
 
 `name` will almost always come from a variable but in case you want to do it manually,
 the value should be the same as the one in the front matter, not the slugified version.
+
+`lang` (optional) default to `config.default_language` in config.toml
 
 ### `get_taxonomy`
 Gets the whole taxonomy of a specific kind.
@@ -170,6 +191,15 @@ Gets the whole taxonomy of a specific kind.
 ```jinja2
 {% set categories = get_taxonomy(kind="categories") %}
 ```
+
+The type of the output is:
+
+```ts
+kind: TaxonomyConfig;
+items: Array<TaxonomyTerm>;
+```
+
+See the [Taxonomies documentation](@/documentation/templates/taxonomies.md) for a full documentation of those types.
 
 ### `load_data`
 Loads data from a file or URL. Supported file types include *toml*, *json* and *csv*.
@@ -258,4 +288,4 @@ Gets the translation of the given `key`, for the `default_language` or the `lang
 
 ### `resize_image`
 Resizes an image file.
-Pease refer to [_Content / Image Processing_](@/documentation/content/image-processing/index.md) for complete documentation.
+Please refer to [_Content / Image Processing_](@/documentation/content/image-processing/index.md) for complete documentation.

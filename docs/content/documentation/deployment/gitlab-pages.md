@@ -1,6 +1,6 @@
- +++
++++
 title = "GitLab Pages"
-weight = 30
+weight = 40
 +++
 
 We are going to use the GitLab CI runner to automatically publish the site (this CI runner is already included in your repository if you use GitLab.com).
@@ -14,7 +14,7 @@ For example, assuming that the username is `john`, you have to create a project 
 Under your group `websites`, you created a project called `websites.gitlab.io`. Your project’s URL will be `https://gitlab.com/websites/websites.gitlab.io`. Once you enable GitLab Pages for your project, your website will be published under `https://websites.gitlab.io`.
 
 
-This guide assumes that your zola project is located in the root of your repository.
+This guide assumes that your Zola project is located in the root of your repository.
 
 ## Ensuring that the CI runner can access your theme
 
@@ -32,25 +32,24 @@ $ git submodule add https://github.com/getzola/hyde.git themes/hyde
 
 ## Setting up the GitLab CI/CD Runner
 
-The second step is to tell the GitLab continous integration runner how to create the GitLab page.
+The second step is to tell the GitLab continuous integration runner how to create the GitLab page.
 
 To do this, create a file called `.gitlab-ci.yml` in the root directory of your repository.
 
 ```yaml
+image: alpine:latest
 variables:
   # This variable will ensure that the CI runner pulls in your theme from the submodule
   GIT_SUBMODULE_STRATEGY: recursive  
   # Specify the zola version you want to use here
-  ZOLA_VERSION: "v0.9.0"
+  ZOLA_VERSION: "v0.12.0"
 
 pages:
   script:
-    # Download the zola executable and store it in zola.tar.gz
-    - curl -L https://github.com/getzola/zola/releases/download/$ZOLA_VERSION/zola-$ZOLA_VERSION-x86_64-unknown-linux-gnu.tar.gz > zola.tar.gz
-    # Unpack the zola executable
-    - tar -xzf zola.tar.gz
+    # Install the zola package from the alpine testing repositories
+    - apk add --update-cache --repository http://dl-3.alpinelinux.org/alpine/edge/testing/ zola
     # Execute zola build
-    - ./zola build
+    - zola build
     
   artifacts:
     paths:
@@ -58,8 +57,8 @@ pages:
       - public
       
   # This config will only publish changes that are pushed on the master branch
-  only:
-  - master
+  only: 
+    - master
 ```
 
 Push this new file and ... Tada! You're done! If you navigate to `settings > pages`, you should be able to see

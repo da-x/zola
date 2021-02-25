@@ -4,14 +4,23 @@ weight = 40
 +++
 
 The default configuration is sufficient to get Zola running locally but not more than that.
-It follows the philosophy of paying for only what you need; almost everything is turned off by default.
+It follows the philosophy of paying for only what you need, almost everything is turned off by default.
 
 To change the configuration, edit the `config.toml` file.
 If you are not familiar with TOML, have a look at [the TOML spec](https://github.com/toml-lang/toml).
 
-Only the `base_url` variable is mandatory; everything else is optional. All configuration variables
-used by Zola as well as their default values are listed below:
+⚠️ If you add keys to your `config.toml`, you must pay attention to which TOML section it belongs to.
 
+Here are the current `config.toml` sections:
+1. main (unnamed)
+2. link_checker
+3. slugify
+4. search
+5. translations
+6. extra
+
+**Only the `base_url` variable is mandatory**. Everything else is optional. All configuration variables
+used by Zola as well as their default values are listed below:
 
 ```toml
 # The base URL of the site; the only required configuration variable.
@@ -38,8 +47,8 @@ highlight_theme = "base16-ocean-dark"
 generate_feed = false
 
 # The filename to use for the feed. Used as the template filename, too.
-# Defaults to "atom.xml", which has a builtin template that renders an Atom 1.0 feed.
-# There is also a builtin template "rss.xml" that renders an RSS 2.0 feed.
+# Defaults to "atom.xml", which has a built-in template that renders an Atom 1.0 feed.
+# There is also a built-in template "rss.xml" that renders an RSS 2.0 feed.
 # feed_filename = "atom.xml"
 
 # The number of articles to include in the feed. All items are included if
@@ -49,7 +58,7 @@ generate_feed = false
 # When set to "true", files in the `static` directory are hard-linked. Useful for large
 # static files. Note that for this to work, both `static` and the
 # output directory need to be on the same filesystem. Note that the theme's `static`
-# files are always copied, regardles of this setting.
+# files are always copied, regardless of this setting.
 # hard_link_static = false
 
 # The taxonomies to be rendered for the site and their configuration.
@@ -73,12 +82,9 @@ taxonomies = []
 #
 languages = []
 
-# When set to "true", the Sass files in the `sass` directory are compiled.
+# When set to "true", the Sass files in the `sass` directory in the site root are compiled.
+# Sass files in theme directories are always compiled.
 compile_sass = false
-
-# When set to "true", a search index is built from the pages and section
-# content for `default_language`.
-build_search_index = false
 
 # A list of glob patterns specifying asset files to ignore when the content
 # directory is processed. Defaults to none, which means that all asset files are
@@ -89,18 +95,6 @@ ignored_content = []
 
 # A list of directories used to search for additional `.sublime-syntax` files.
 extra_syntaxes = []
-
-# Optional translation object. The key if present should be a language code.
-# Example:
-#     default_language = "fr"
-#
-#     [translations]
-#     [translations.fr]
-#     title = "Un titre"
-#
-#     [translations.en]
-#     title = "A title"
-
 
 # Configuration of the link checker.
 [link_checker]
@@ -115,17 +109,49 @@ skip_anchor_prefixes = [
 ]
 
 # Various slugification strategies, see below for details
-# Defauls to everything being a slug
+# Defaults to everything being a slug
 [slugify]
 paths = "on"
 taxonomies = "on"
 anchors = "on"
 
+# When set to "true", a search index is built from the pages and section
+# content for `default_language`.
+build_search_index = false
+
+[search]
+# Whether to include the title of the page/section in the index
+include_title = true
+# Whether to include the description of the page/section in the index
+include_description = false
+# Whether to include the rendered content of the page/section in the index
+include_content = true
+# At which character to truncate the content to. Useful if you have a lot of pages and the index would
+# become too big to load on the site. Defaults to not being set.
+# truncate_content_length = 100
+
 # Optional translation object. Keys should be language codes.
+# Optional translation object. The key if present should be a language code.
+# Example:
+#     default_language = "fr"
+#
+#     [translations]
+#     [translations.fr]
+#     title = "Un titre"
+#
+#     [translations.en]
+#     title = "A title"
+#
 [translations]
 
 # You can put any kind of data here. The data
-# will be accessible in all templates.
+# will be accessible in all templates
+# Example:
+#     [extra]
+#     author = "Famous author"
+#
+# author value will be available using {{ config.extra.author }} in templates
+#
 [extra]
 ```
 
@@ -158,11 +184,12 @@ Zola currently has the following highlight themes available:
 - [ir-white](https://tmtheme-editor.herokuapp.com/#!/editor/theme/IR_White)
 - [kronuz](https://tmtheme-editor.herokuapp.com/#!/editor/theme/Kronuz)
 - [material-dark](https://tmtheme-editor.herokuapp.com/#!/editor/theme/Material%20Dark)
-- [material-light](https://github.com/morhetz/gruvbox)
+- [material-light](https://tmtheme-editor.herokuapp.com/#!/editor/theme/Material%20Light)
 - [monokai](https://tmtheme-editor.herokuapp.com/#!/editor/theme/Monokai)
 - [nord](https://github.com/crabique/Nord-plist/tree/0d655b23d6b300e691676d9b90a68d92b267f7ec)
 - [nyx-bold](https://github.com/GalAster/vscode-theme-nyx)
 - [one-dark](https://github.com/andresmichel/one-dark-theme)
+- [OneHalf](https://github.com/sonph/onehalf)
 - [solarized-dark](https://tmtheme-editor.herokuapp.com/#!/editor/theme/Solarized%20(dark))
 - [solarized-light](https://tmtheme-editor.herokuapp.com/#!/editor/theme/Solarized%20(light))
 - [subway-madrid](https://github.com/idleberg/Subway.tmTheme)

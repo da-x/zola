@@ -16,6 +16,10 @@ For example the default would be page/1.
 - `feed`: if set to `true`, a feed (atom by default) will be generated for each term.
 - `lang`: only set this if you are making a multilingual site and want to indicate which language this taxonomy is for
 
+Insert into the configuration file (config.toml):
+
+⚠️ Place the taxonomies key in the main section and not in the `[extra]` section
+
 **Example 1:** (one language)
 
 ```toml
@@ -52,7 +56,7 @@ categories = ["programming"]
 
 In a similar manner to how section and pages calculate their output path:
 - the taxonomy name is never slugified
-- the taxonomy term (eg. as specific tag) is slugified when `slugify.taxonomies` is enabled (`"on"`, the default) in the configuration
+- the taxonomy term (e.g. as specific tag) is slugified when `slugify.taxonomies` is enabled (`"on"`, the default) in the configuration
 
 The taxonomy pages are then available at the following paths:
 
@@ -60,4 +64,4 @@ The taxonomy pages are then available at the following paths:
 $BASE_URL/$NAME/ (taxonomy)
 $BASE_URL/$NAME/$SLUG (taxonomy entry)
 ```
-
+Note that taxonomies are case insensitive so terms that have the same slug will get merged, e.g. sections and pages containing the tag "example" will be shown in the same taxonomy page as ones containing "Example" 

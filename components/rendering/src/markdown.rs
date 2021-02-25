@@ -264,9 +264,11 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
 
     let mut opts = Options::empty();
     let mut has_summary = false;
+    let mut in_html_block = false;
     opts.insert(Options::ENABLE_TABLES);
     opts.insert(Options::ENABLE_FOOTNOTES);
     opts.insert(Options::ENABLE_STRIKETHROUGH);
+    opts.insert(Options::ENABLE_TASKLISTS);
 
     {
         let mut events = Parser::new_ext(content, opts)
@@ -312,9 +314,9 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
 
                             let highlighted = if in_extra {
                                 if let Some(ref extra) = context.config.extra_syntax_set {
-                                    let mut html_generator = ClassedHTMLGenerator::new(&syntax, &extra);
+                                    let mut html_generator = ClassedHTMLGenerator::new_with_class_style(&syntax, &extra, syntect::html::ClassStyle::Spaced);
                                     for line in text.lines() {
-                                        html_generator.parse_html_for_line(&line);
+                                        html_generator.parse_html_for_line_which_includes_newline(&format!("{}\n", line));
                                     }
                                     html_generator.finalize()
                                 } else {
@@ -323,9 +325,9 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                                     );
                                 }
                             } else {
-                                let mut html_generator = ClassedHTMLGenerator::new(&syntax, &SYNTAX_SET);
+                                let mut html_generator = ClassedHTMLGenerator::new_with_class_style(&syntax, &SYNTAX_SET, syntect::html::ClassStyle::Spaced);
                                 for line in text.lines() {
-                                    html_generator.parse_html_for_line(&line);
+                                    html_generator.parse_html_for_line_which_includes_newline(&format!("{}\n", line));
                                 }
                                 html_generator.finalize()
                             };
@@ -335,22 +337,15 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                             html.push_str(&processed);
 
                             return Event::Html(html.into());
+                        } else {
+                            // Business as usual
+                            Event::Text(text)
                         }
-
-                        // Business as usual
-                        Event::Text(text)
                     }
                     Event::Start(Tag::CodeBlock(ref kind)) => {
                         if !context.config.highlight_code {
                             return Event::Html("<pre><code>".into());
                         }
-
-                        match kind {
-                            CodeBlockKind::Indented => (),
-                            CodeBlockKind::Fenced(info) => {
-                                highlighter = Some(get_highlighter(info, &context.config));
-                            }
-                        };
 
                         let info_parsed = match kind {
                             CodeBlockKind::Indented => Default::default(),
@@ -409,9 +404,27 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
 
                         Event::Start(Tag::Link(link_type, fixed_link.into(), title))
                     }
-                    Event::Html(ref markup) if markup.contains("<!-- more -->") => {
-                        has_summary = true;
-                        Event::Html(CONTINUE_READING.into())
+                    Event::Html(ref markup) => {
+                        if markup.contains("<!-- more -->") {
+                            has_summary = true;
+                            Event::Html(CONTINUE_READING.into())
+                        } else {
+                            if in_html_block && markup.contains("</pre>") {
+                                in_html_block = false;
+                                Event::Html(markup.replacen("</pre>", "", 1).into())
+                            } else if markup.contains("pre data-shortcode") {
+                                in_html_block = true;
+                                let m = markup.replacen("<pre data-shortcode>", "", 1);
+                                if m.contains("</pre>") {
+                                    in_html_block = false;
+                                    Event::Html(m.replacen("</pre>", "", 1).into())
+                                } else {
+                                    Event::Html(m.into())
+                                }
+                            } else {
+                                event
+                            }
+                        }
                     }
                     _ => event,
                 }

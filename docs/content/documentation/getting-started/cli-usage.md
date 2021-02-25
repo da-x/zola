@@ -1,6 +1,6 @@
 +++
 title = "CLI usage"
-weight = 2
+weight = 15
 +++
 
 Zola only has 4 commands: `init`, `build`, `serve` and `check`.
@@ -19,6 +19,8 @@ $ zola init
 ```
 
 If the `my_site` directory already exists, Zola will only populate it if it contains only hidden files (dotfiles are ignored). If no `my_site` argument is passed, Zola will try to populate the current directory.
+
+In case you want to attempt to populate a non-empty directory and are brave, you can use `zola init --force`. Note that this will _not_ overwrite existing folders or files; in those cases you will get a `File exists (os error 17)` error or similar.
 
 You can initialize a git repository and a Zola site directly from within a new folder:
 
@@ -73,7 +75,7 @@ You can also specify different addresses for the interface and base_url using `-
 Use the `--open` flag to automatically open the locally hosted instance in your
 web browser.
 
-In the event you don't want Zola to run a local webserver, you can use the `--watch-only` flag.
+In the event you don't want Zola to run a local web server, you can use the `--watch-only` flag.
 
 Before starting, Zola will delete the `public` directory to start from a clean slate.
 
@@ -103,7 +105,7 @@ $ zola --config config.staging.toml serve
 
 By default, drafts are not loaded. If you wish to include them, pass the `--drafts` flag.
 
-### check
+## check
 
 The check subcommand will try to build all pages just like the build command would, but without writing any of the
 results to disk. Additionally, it will also check all external links in Markdown files by trying to fetch

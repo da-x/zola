@@ -17,7 +17,7 @@ following fields:
 name = "my theme name"
 description = "A classic blog theme"
 license = "MIT"
-homepage = "https://github.com/Keats/zola-hyde"
+homepage = "https://github.com/getzola/hyde"
 # The minimum version of Zola required
 min_version = "0.4.0"
 # An optional live demo URL
@@ -50,11 +50,6 @@ theme, with live reload working as expected.
 
 Make sure to commit every directory (including `content`) in order for other people
 to be able to build the theme from your repository.
-
-### Caveat
-
-Please note that [include paths](https://tera.netlify.com/docs#include) can only be used in normal templates.
-Theme templates should use [macros](https://tera.netlify.com/docs#macros) instead.
 
 ## Submitting a theme to the gallery
 
