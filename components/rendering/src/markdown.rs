@@ -11,9 +11,8 @@ use front_matter::InsertAnchor;
 use utils::site::resolve_internal_link;
 use utils::slugs::slugify_anchors;
 use utils::vec::InsertMany;
-
+use cmark::CodeBlockKind;
 use self::cmark::{Event, LinkType, Options, Parser, Tag};
-use pulldown_cmark::CodeBlockKind;
 
 const CONTINUE_READING: &str = "<span id=\"continue-reading\"></span>";
 const ANCHOR_LINK_TEMPLATE: &str = "anchor-link.html";
@@ -97,17 +96,12 @@ fn fix_link(
         return Ok(link.to_string());
     }
 
-    // TODO: remove me in a few versions when people have upgraded
-    if link.starts_with("./") && link.contains(".md") {
-        println!("It looks like the link `{}` is using the previous syntax for internal links: start with @/ instead", link);
-    }
-
     // A few situations here:
     // - it could be a relative link (starting with `@/`)
     // - it could be a link to a co-located asset
     // - it could be a normal link
     let result = if link.starts_with("@/") {
-        match resolve_internal_link(&link, context.permalinks) {
+        match resolve_internal_link(&link, &context.permalinks) {
             Ok(resolved) => {
                 if resolved.anchor.is_some() {
                     internal_links_with_anchors
@@ -249,6 +243,10 @@ fn parse_info(t: impl AsRef<str>) -> CodeBlockInfo {
 }
 
 pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Rendered> {
+    lazy_static! {
+        static ref EMOJI_REPLACER: gh_emoji::Replacer = gh_emoji::Replacer::new();
+    }
+
     // the rendered html
     let mut html = String::with_capacity(content.len());
     // Set while parsing
@@ -269,6 +267,10 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
     opts.insert(Options::ENABLE_FOOTNOTES);
     opts.insert(Options::ENABLE_STRIKETHROUGH);
     opts.insert(Options::ENABLE_TASKLISTS);
+
+    if context.config.markdown.smart_punctuation {
+        opts.insert(Options::ENABLE_SMART_PUNCTUATION);
+    }
 
     {
         let mut events = Parser::new_ext(content, opts)
@@ -313,17 +315,9 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                             }
 
                             let highlighted = if in_extra {
-                                if let Some(ref extra) = context.config.extra_syntax_set {
-                                    let mut html_generator = ClassedHTMLGenerator::new_with_class_style(&syntax, &extra, syntect::html::ClassStyle::Spaced);
-                                    for line in text.lines() {
-                                        html_generator.parse_html_for_line_which_includes_newline(&format!("{}\n", line));
-                                    }
-                                    html_generator.finalize()
-                                } else {
-                                    unreachable!(
-                                        "Got a highlighter from extra syntaxes but no extra?"
-                                    );
-                                }
+                                unreachable!(
+                                    "Got a highlighter from extra syntaxes but no extra?"
+                                );
                             } else {
                                 let mut html_generator = ClassedHTMLGenerator::new_with_class_style(&syntax, &SYNTAX_SET, syntect::html::ClassStyle::Spaced);
                                 for line in text.lines() {
@@ -343,7 +337,21 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                         }
                     }
                     Event::Start(Tag::CodeBlock(ref kind)) => {
-                        if !context.config.highlight_code {
+                        let language = match kind {
+                            cmark::CodeBlockKind::Fenced(language) => {
+                                Some(language)
+                            }
+                            _ => None,
+                        };
+
+                        if !context.config.highlight_code() {
+                            if let Some(lang) = language {
+                                let html = format!(
+                                    r#"<pre><code class="language-{}" data-lang="{}">"#,
+                                    lang, lang
+                                );
+                                return Event::Html(html.into());
+                            }
                             return Event::Html("<pre><code>".into());
                         }
 
@@ -351,8 +359,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                             CodeBlockKind::Indented => Default::default(),
                             CodeBlockKind::Fenced(info) => {
                                 let info_parsed = parse_info(info);
-                                highlighter = Some(get_highlighter(&info_parsed.language,
-                                        &context.config));
+                                highlighter = Some(get_highlighter(&info_parsed.language));
                                 info_parsed
                             }
                         };
@@ -361,7 +368,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                         Event::Html("".into())
                     }
                     Event::End(Tag::CodeBlock(_)) => {
-                        if !context.config.highlight_code {
+                        if !context.config.highlight_code() {
                             return Event::Html("</code></pre>\n".into());
                         }
                         // reset highlight and close the code block
@@ -401,29 +408,42 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                                 return Event::Html("".into());
                             }
                         };
-
-                        Event::Start(Tag::Link(link_type, fixed_link.into(), title))
+                        if is_external_link(&link)
+                            && context.config.markdown.has_external_link_tweaks()
+                        {
+                            let mut escaped = String::new();
+                            // write_str can fail but here there are no reasons it should (afaik?)
+                            cmark::escape::escape_href(&mut escaped, &link)
+                                .expect("Could not write to buffer");
+                            Event::Html(
+                                context
+                                    .config
+                                    .markdown
+                                    .construct_external_link_tag(&escaped, &title)
+                                    .into(),
+                            )
+                        } else {
+                            Event::Start(Tag::Link(link_type, fixed_link.into(), title))
+                        }
                     }
                     Event::Html(ref markup) => {
                         if markup.contains("<!-- more -->") {
                             has_summary = true;
                             Event::Html(CONTINUE_READING.into())
-                        } else {
-                            if in_html_block && markup.contains("</pre>") {
+                        } else if in_html_block && markup.contains("</pre>") {
+                            in_html_block = false;
+                            Event::Html(markup.replacen("</pre>", "", 1).into())
+                        } else if markup.contains("pre data-shortcode") {
+                            in_html_block = true;
+                            let m = markup.replacen("<pre data-shortcode>", "", 1);
+                            if m.contains("</pre>") {
                                 in_html_block = false;
-                                Event::Html(markup.replacen("</pre>", "", 1).into())
-                            } else if markup.contains("pre data-shortcode") {
-                                in_html_block = true;
-                                let m = markup.replacen("<pre data-shortcode>", "", 1);
-                                if m.contains("</pre>") {
-                                    in_html_block = false;
-                                    Event::Html(m.replacen("</pre>", "", 1).into())
-                                } else {
-                                    Event::Html(m.into())
-                                }
+                                Event::Html(m.replacen("</pre>", "", 1).into())
                             } else {
-                                event
+                                Event::Html(m.into())
                             }
+                        } else {
+                            event
                         }
                     }
                     _ => event,
@@ -485,7 +505,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
 
                 let anchor_link = utils::templates::render_template(
                     &ANCHOR_LINK_TEMPLATE,
-                    context.tera,
+                    &context.tera,
                     c,
                     &None,
                 )

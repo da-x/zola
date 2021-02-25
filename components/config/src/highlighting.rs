@@ -4,8 +4,6 @@ use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
 use syntect::parsing::SyntaxReference;
 
-use crate::config::Config;
-
 lazy_static! {
     pub static ref SYNTAX_SET: SyntaxSet = {
         let ss: SyntaxSet =
@@ -22,22 +20,9 @@ pub fn get_css(theme: &syntect::highlighting::Theme) -> String {
 }
 
 /// Returns the highlighter and whether it was found in the extra or not
-pub fn get_highlighter(lang: &str, config: &Config) -> (SyntaxReference, bool) {
-    let mut in_extra = false;
-
+pub fn get_highlighter(lang: &str) -> (SyntaxReference, bool) {
     let syntax = SYNTAX_SET
         .find_syntax_by_token(lang)
-        .or_else(|| {
-            if let Some(ref extra) = config.extra_syntax_set {
-                let s = extra.find_syntax_by_token(lang);
-                if s.is_some() {
-                    in_extra = true;
-                }
-                s
-            } else {
-                None
-            }
-        })
     .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
-    (syntax.clone(), in_extra)
+    (syntax.clone(), false)
 }

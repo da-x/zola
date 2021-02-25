@@ -24,14 +24,14 @@ pub fn compile_sass(base_path: &Path, output_path: &Path, config: &Config) -> Re
     let tmp_dir = tempdir::TempDir::new("css")?;
     options.include_paths.push(String::from(tmp_dir.path().to_string_lossy().as_ref()));
 
-    let theme = &config::highlighting::THEME_SET.themes[&config.highlight_theme];
+    let theme = &config::highlighting::THEME_SET.themes[config.highlight_theme()];
     let mut file = std::fs::File::create(tmp_dir.path().join("syntaxtheme.scss"))?;
     let css = config::highlighting::get_css(theme);
     let css = css.replace(".label)", ".label");
     file.write_all(&css.as_bytes())?;
     drop(file);
 
-    let theme = &config::highlighting::THEME_SET.themes[&config.dark_highlight_theme];
+    let theme = &config::highlighting::THEME_SET.themes[config.dark_highlight_theme()];
     let mut file = std::fs::File::create(tmp_dir.path().join("darksyntaxtheme.scss"))?;
     let css = config::highlighting::get_css(theme);
     let css = css.replace(".label)", ".label");
